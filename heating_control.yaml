@@ -1,0 +1,727 @@
+blueprint:
+  name: 🔥 Heating Control
+  description: |
+    Intelligent heating control based on presence, schedules, and conditions.
+
+    **Features:**
+    - 🌡️ Temperature control with comfort/eco/away modes
+    - ⚡ Boost temperature offset for scheduled periods
+    - 👥 Presence detection
+    - 📅 Schedule integration for comfort periods
+    - 🪟 Window/door detection
+    - ❄️ Automatic frost protection
+    - 🎭 Guest mode
+    - 🎯 Optional preset mode support
+    - ⏱️ Configurable durations for all state changes
+
+    **Tip:** For reliable frost protection behavior across HA restarts, configure the optional datetime helper!
+  domain: automation
+  input:
+    thermostats_and_temperatures:
+      name: Thermostats & Temperatures
+      icon: mdi:thermometer
+      collapsed: false
+      input:
+        climate_target:
+          name: Climate Entities
+          description: The climate/thermostat entities to control
+          selector:
+            entity:
+              filter:
+                - domain: climate
+              multiple: true
+
+        comfort_temperature:
+          name: 🛋️ Comfort Temperature
+          description: Target temperature when home and schedule is active
+          default: 21
+          selector:
+            number:
+              min: 15
+              max: 30
+              step: 0.5
+              unit_of_measurement: "°C"
+              mode: slider
+
+        eco_temperature:
+          name: 🍃 Eco Temperature
+          description: Target temperature when home but schedule is inactive
+          default: 18
+          selector:
+            number:
+              min: 10
+              max: 25
+              step: 0.5
+              unit_of_measurement: "°C"
+              mode: slider
+
+        boost_temperature_offset:
+          name: ⚡ Boost Temperature Offset
+          description: Temperature boost to add to comfort temperature during boost periods (e.g., +2°C = comfort 21°C becomes 23°C)
+          default: 1
+          selector:
+            number:
+              min: 0
+              max: 5
+              step: 0.5
+              unit_of_measurement: "°C"
+              mode: slider
+
+        away_temperature_offset:
+          name: 🚶 Away Temperature Offset
+          description: Temperature offset from comfort when presence is not detected (0 = use eco temperature, -5 = comfort minus 5°C)
+          default: -1
+          selector:
+            number:
+              min: -5
+              max: 0
+              step: 0.5
+              unit_of_measurement: "°C"
+              mode: slider
+
+        frost_protection_temperature:
+          name: ❄️ Frost Protection Temperature
+          description: Target temperature during frost protection mode
+          default: 12
+          selector:
+            number:
+              min: 5
+              max: 15
+              step: 0.5
+              unit_of_measurement: "°C"
+              mode: slider
+
+    preset_modes:
+      name: Preset Modes
+      icon: mdi:target
+      collapsed: true
+      input:
+        use_preset_modes:
+          name: 🎚️ Use Preset Modes
+          description: Enable to set preset modes on climate entities. Disable to only control temperature setpoints and HVAC mode.
+          default: false
+          selector:
+            boolean:
+
+        comfort_preset:
+          name: 🛋️ Comfort Preset Mode
+          description: Preset mode to use for comfort temperature
+          default: "comfort"
+          selector:
+            text:
+
+        eco_preset:
+          name: 🍃 Eco Preset Mode
+          description: Preset mode to use for eco temperature
+          default: "eco"
+          selector:
+            text:
+
+        boost_preset:
+          name: ⚡ Boost Preset Mode
+          description: Preset mode to use for boost mode
+          default: "comfort"
+          selector:
+            text:
+
+        away_preset:
+          name: 🚶 Away Preset Mode
+          description: Preset mode to use for away mode
+          default: "comfort_1"
+          selector:
+            text:
+
+        frost_protection_preset:
+          name: ❄️ Frost Protection Preset Mode
+          description: Preset mode to use for frost protection
+          default: "frost_protection"
+          selector:
+            text:
+
+    schedule:
+      name: Schedule
+      icon: mdi:calendar-clock
+      collapsed: true
+      input:
+        schedule_entity:
+          name: 📅 Schedule Entity
+          description: |
+            Schedule entity that defines when comfort temperature should be active.
+
+            Create your schedule [here](https://my.home-assistant.io/redirect/helpers/).
+          default: []
+          selector:
+            entity:
+              filter:
+                - domain: schedule
+              multiple: false
+
+    presence_detection:
+      name: Presence Detection
+      icon: mdi:account-multiple
+      collapsed: true
+      input:
+        presence_persons:
+          name: 👤 Person Entities
+          description: Person entities to track for presence (someone home = at least one person home)
+          default: []
+          selector:
+            entity:
+              filter:
+                - domain: person
+              multiple: true
+
+        guest_mode:
+          name: 🎭 Guest Mode
+          description: Toggle that acts like an additional person entity (when on = someone home, combined with other presence detection)
+          default: []
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - input_boolean
+                    - switch
+                    - binary_sensor
+              multiple: false
+
+        presence_sensor:
+          name: 📍 Presence Sensor
+          description: Binary sensor for room/area presence detection (combines with person entities using AND logic when both configured)
+          default: []
+          selector:
+            entity:
+              filter:
+                - domain: binary_sensor
+              multiple: false
+
+        person_away_duration:
+          name: ⏱️ Person Away Duration
+          description: Duration for which everyone must be away before considering them away
+          default:
+            hours: 0
+            minutes: 5
+            seconds: 0
+          selector:
+            duration:
+              enable_day: false
+
+        person_home_duration:
+          name: ⏱️ Person Home Duration
+          description: Duration for which someone must be home before considering them home
+          default:
+            hours: 0
+            minutes: 0
+            seconds: 30
+          selector:
+            duration:
+              enable_day: false
+
+    boost:
+      name: Boost Temperature
+      icon: mdi:flash
+      collapsed: true
+      input:
+        boost_schedule_entity:
+          name: ⚡ Boost Schedule/Sensor
+          description: |
+            Schedule or binary sensor that defines when boost temperature offset should be active.
+
+            Boost only applies during comfort mode. When this schedule/sensor is ON and comfort temperature is active,
+            the boost offset will be added to the comfort temperature.
+
+            Create your schedule [here](https://my.home-assistant.io/redirect/helpers/).
+          default: []
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - schedule
+                    - binary_sensor
+              multiple: false
+
+    frost_protection:
+      name: Frost Protection
+      icon: mdi:snowflake-alert
+      collapsed: true
+      input:
+        frost_protection_duration:
+          name: ⏱️ Frost Protection Duration
+          description: Duration for which all persons (and guest mode) must be away before activating frost protection mode
+          default:
+            days: 1
+            hours: 0
+            minutes: 0
+            seconds: 0
+          selector:
+            duration:
+              enable_day: true
+
+        frost_protection_datetime_helper:
+          name: ❄️ Frost Protection DateTime Helper (Optional)
+          description: |
+            `optional` `recommended for frost protection`
+
+            Input datetime that tracks when frost protection should activate.
+            Serves dual purpose: scheduling activation time AND tracking active state.
+            Ensures frost protection works correctly across HA restarts.
+
+            If not configured, automatic frost protection is disabled (manual override still works).
+
+            Create your helper [here](https://my.home-assistant.io/redirect/helpers/).
+          default: []
+          selector:
+            entity:
+              filter:
+                - domain: input_datetime
+              multiple: false
+
+    window_detection:
+      name: Window & Door Detection
+      icon: mdi:window-open
+      collapsed: true
+      input:
+        window_sensors:
+          name: 🪟 Window/Door Sensors
+          description: Binary sensors for windows/doors (on/open = heating turns off)
+          default: []
+          selector:
+            entity:
+              filter:
+                - domain: binary_sensor
+                - device_class:
+                    - window
+                    - door
+                    - opening
+              multiple: true
+
+        window_open_duration:
+          name: ⏱️ Window Open Duration
+          description: Duration for which window must be open before reducing heating
+          default:
+            hours: 0
+            minutes: 0
+            seconds: 30
+          selector:
+            duration:
+              enable_day: false
+
+        window_close_duration:
+          name: ⏱️ Window Close Duration
+          description: Duration for which window must be closed before restoring heating
+          default:
+            hours: 0
+            minutes: 0
+            seconds: 30
+          selector:
+            duration:
+              enable_day: false
+
+    manual_overrides:
+      name: Manual Overrides
+      icon: mdi:hand-back-right
+      collapsed: true
+      input:
+        heating_off_override:
+          name: 🛑 Heating Off Override
+          description: Toggle to turn off all heating (sets HVAC mode to off). Windows still override this.
+          default: []
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - input_boolean
+                    - switch
+                    - binary_sensor
+              multiple: false
+
+        frost_protection_override:
+          name: ❄️ Manual Frost Protection Override
+          description: Toggle to manually activate frost protection mode (uses frost protection temperature). Complements automatic frost protection.
+          default: []
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - input_boolean
+                    - switch
+                    - binary_sensor
+              multiple: false
+
+variables:
+  # Thermostats & Temperatures
+  climate_target: !input climate_target
+  comfort_temp: !input comfort_temperature
+  eco_temp: !input eco_temperature
+  boost_temp_offset: !input boost_temperature_offset
+  away_temp_offset: !input away_temperature_offset
+  frost_temp: !input frost_protection_temperature
+
+  # Preset Modes
+  use_preset_modes: !input use_preset_modes
+  comfort_preset: !input comfort_preset
+  eco_preset: !input eco_preset
+  away_preset: !input away_preset
+  frost_protection_preset: !input frost_protection_preset
+
+  # Schedule
+  schedule_entity: !input schedule_entity
+
+  # Presence Detection
+  presence_persons: !input presence_persons
+  guest_mode: !input guest_mode
+  presence_sensor: !input presence_sensor
+
+  # Boost
+  boost_schedule_entity: !input boost_schedule_entity
+
+  # Frost Protection
+  frost_protection_duration: !input frost_protection_duration
+  frost_protection_datetime_helper: !input frost_protection_datetime_helper
+
+  # Window Detection
+  window_sensors: !input window_sensors
+
+  # Manual Overrides
+  heating_off_override: !input heating_off_override
+  frost_protection_override: !input frost_protection_override
+
+  # Calculate away temperature from comfort temperature and offset
+  # If offset is 0, use eco temperature; otherwise use comfort + offset
+  away_temp: >-
+    {% if away_temp_offset == 0 %}
+      {{ eco_temp }}
+    {% else %}
+      {{ comfort_temp + away_temp_offset }}
+    {% endif %}
+
+  # Calculate if guest mode is active
+  guest_mode_active: >-
+    {{ guest_mode | length > 0 and is_state(guest_mode, 'on') }}
+
+  # Calculate if heating off override is active
+  heating_off_override_active: >-
+    {{ heating_off_override | length > 0 and is_state(heating_off_override, 'on') }}
+
+  # Calculate if frost protection override is active
+  frost_protection_override_active: >-
+    {{ frost_protection_override | length > 0 and is_state(frost_protection_override, 'on') }}
+
+  # Calculate if presence sensor is active
+  presence_sensor_active: >-
+    {{ presence_sensor | length > 0 and is_state(presence_sensor, 'on') }}
+
+  # Calculate if any person is home
+  any_person_home: >-
+    {{ presence_persons | length > 0 and expand(presence_persons) | selectattr('state', 'eq', 'home') | list | count > 0 }}
+
+  # Calculate if presence is detected (guest mode treated as person entity)
+  presence_detected: >-
+    {% set anyone_home = any_person_home or guest_mode_active %}
+    {% if presence_sensor | length > 0 and (presence_persons | length > 0 or guest_mode | length > 0) %}
+      {{ presence_sensor_active and anyone_home }}
+    {% elif presence_sensor | length > 0 %}
+      {{ presence_sensor_active }}
+    {% elif presence_persons | length > 0 or guest_mode | length > 0 %}
+      {{ anyone_home }}
+    {% else %}
+      {{ true }}
+    {% endif %}
+
+  # Calculate if schedule is active
+  schedule_active: >-
+    {{ schedule_entity | length > 0 and is_state(schedule_entity, 'on') }}
+
+  # Calculate if boost schedule is active
+  boost_active: >-
+    {{ boost_schedule_entity | length > 0 and is_state(boost_schedule_entity, 'on') }}
+
+  # Calculate boosted comfort temperature and preset
+  # Boost only applies when boost schedule is active and comfort temp would be used
+  comfort_temp_boosted: >-
+    {% if boost_active %}
+      {{ comfort_temp + boost_temp_offset }}
+    {% else %}
+      {{ comfort_temp }}
+    {% endif %}
+
+  comfort_preset_boosted: >-
+    {% if boost_active %}
+      {{ boost_preset }}
+    {% else %}
+      {{ comfort_preset }}
+    {% endif %}
+
+  # Calculate if any window is open
+  window_open: >-
+    {{ window_sensors | length > 0 and expand(window_sensors) | selectattr('state', 'eq', 'on') | list | count > 0 }}
+
+trigger:
+  # Trigger on HA start
+  - trigger: homeassistant
+    event: start
+    id: ha_start
+
+  # Trigger when climate entities become available (after being offline)
+  - trigger: state
+    entity_id: !input climate_target
+    from:
+      - "unavailable"
+      - "unknown"
+    id: climate_available
+
+  # Trigger when person entities change to/from home with durations
+  - trigger: state
+    entity_id: !input presence_persons
+    to: "not_home"
+    for: !input person_away_duration
+    id: presence_away
+
+  - trigger: state
+    entity_id: !input presence_persons
+    to: "home"
+    for: !input person_home_duration
+    id: presence_home
+
+  # Trigger when presence sensor changes with durations
+  - trigger: state
+    entity_id: !input presence_sensor
+    to: "off"
+    for: !input person_away_duration
+    id: presence_sensor_away
+
+  - trigger: state
+    entity_id: !input presence_sensor
+    to: "on"
+    for: !input person_home_duration
+    id: presence_sensor_home
+
+  # Trigger when guest mode changes
+  - trigger: state
+    entity_id: !input guest_mode
+    id: guest_mode_change
+
+  # Trigger when heating off override changes
+  - trigger: state
+    entity_id: !input heating_off_override
+    id: heating_off_override_change
+
+  # Trigger when frost protection override changes
+  - trigger: state
+    entity_id: !input frost_protection_override
+    id: frost_protection_override_change
+
+  # Trigger when schedule changes
+  - trigger: state
+    entity_id: !input schedule_entity
+    id: schedule_change
+
+  # Trigger when boost schedule changes
+  - trigger: state
+    entity_id: !input boost_schedule_entity
+    id: boost_schedule_change
+
+  # Trigger when window sensors change with durations
+  - trigger: state
+    entity_id: !input window_sensors
+    to: "on"
+    for: !input window_open_duration
+    id: window_opened
+
+  - trigger: state
+    entity_id: !input window_sensors
+    to: "off"
+    for: !input window_close_duration
+    id: window_closed
+
+  # Trigger when any person leaves (to schedule frost protection)
+  - trigger: state
+    entity_id: !input presence_persons
+    to: "not_home"
+    id: person_left
+
+  # Trigger when any person comes home (to cancel frost protection)
+  - trigger: state
+    entity_id: !input presence_persons
+    to: "home"
+    id: person_returned
+
+  # Trigger when guest mode turns off (to schedule frost protection)
+  - trigger: state
+    entity_id: !input guest_mode
+    to: "off"
+    id: guest_left
+
+  # Trigger when guest mode turns on (to cancel frost protection)
+  - trigger: state
+    entity_id: !input guest_mode
+    to: "on"
+    id: guest_arrived
+
+  # Trigger when scheduled frost protection time is reached
+  - trigger: time
+    at: !input frost_protection_datetime_helper
+    id: frost_protection_time_reached
+
+condition: []
+
+action:
+  # When a person leaves or guest mode turns off, check if everyone is away and schedule frost protection
+  - if:
+      - condition: template
+        value_template: >-
+          {{ trigger.id in ['person_left', 'guest_left']
+             and frost_protection_datetime_helper | length > 0 }}
+    then:
+      # Verify no one is home (persons AND guest both away) before scheduling
+      - if:
+          - condition: template
+            value_template: "{{ not (any_person_home or guest_mode_active) }}"
+        then:
+          # Schedule frost protection for now + frost_protection_duration
+          - service: input_datetime.set_datetime
+            target:
+              entity_id: "{{ frost_protection_datetime_helper }}"
+            data:
+              datetime: "{{ (now() + timedelta(**frost_protection_duration)).strftime('%Y-%m-%d %H:%M:%S') }}"
+
+  # When a person returns or guest mode turns on, cancel frost protection
+  - if:
+      - condition: template
+        value_template: >-
+          {{ trigger.id in ['person_returned', 'guest_arrived']
+             and frost_protection_datetime_helper | length > 0 }}
+    then:
+      # Cancel scheduled frost protection (set to epoch as sentinel)
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: "{{ frost_protection_datetime_helper }}"
+        data:
+          datetime: "1970-01-01 00:00:00"
+
+  # When frost protection override is turned OFF, reset the scheduled frost protection
+  - if:
+      - condition: template
+        value_template: >-
+          {{ trigger.id == 'frost_protection_override_change'
+             and frost_protection_datetime_helper | length > 0
+             and not frost_protection_override_active }}
+    then:
+      # Set datetime based on presence: reschedule if away, reset to epoch if home
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: "{{ frost_protection_datetime_helper }}"
+        data:
+          datetime: >-
+            {% if not (any_person_home or guest_mode_active) %}
+              {{ (now() + timedelta(**frost_protection_duration)).strftime('%Y-%m-%d %H:%M:%S') }}
+            {% else %}
+              1970-01-01 00:00:00
+            {% endif %}
+
+  # Update climate entities
+  - repeat:
+      for_each: "{{ climate_target }}"
+      sequence:
+        # Only update if climate entity is available
+        - condition: template
+          value_template: "{{ states(repeat.item) not in ['unavailable', 'unknown'] }}"
+
+        # Get current temperature and preset mode settings
+        - variables:
+            current_temp: "{{ state_attr(repeat.item, 'temperature') | float(0) }}"
+            current_preset: "{{ state_attr(repeat.item, 'preset_mode') }}"
+            supported_presets: "{{ state_attr(repeat.item, 'preset_modes') | default([]) }}"
+            current_hvac_mode: "{{ states(repeat.item) }}"
+
+            # Calculate frost_protection_active fresh (reads current datetime helper state)
+            frost_protection_active: >-
+              {% if frost_protection_datetime_helper | length > 0 %}
+                {% set scheduled_dt = states(frost_protection_datetime_helper) | as_datetime | as_local %}
+                {% set epoch_dt = '1970-01-01 00:00:00' | as_datetime | as_local %}
+                {{ frost_protection_override_active or (scheduled_dt > epoch_dt and scheduled_dt <= now()) }}
+              {% else %}
+                {{ frost_protection_override_active }}
+              {% endif %}
+
+            # Calculate target temperature based on current frost_protection_active
+            target_temp: >-
+              {% if frost_protection_active %}
+                {{ frost_temp }}
+              {% elif schedule_active and presence_detected %}
+                {{ comfort_temp_boosted }}
+              {% elif schedule_active %}
+                {{ away_temp }}
+              {% elif schedule_entity | length == 0 and presence_detected %}
+                {{ comfort_temp_boosted }}
+              {% else %}
+                {{ eco_temp }}
+              {% endif %}
+
+            # Calculate target preset based on current frost_protection_active
+            target_preset: >-
+              {% if frost_protection_active %}
+                {{ frost_protection_preset }}
+              {% elif schedule_active and presence_detected %}
+                {{ comfort_preset }}
+              {% elif schedule_active %}
+                {{ away_preset }}
+              {% elif schedule_entity | length == 0 and presence_detected %}
+                {{ comfort_preset_boosted }}
+              {% else %}
+                {{ eco_preset }}
+              {% endif %}
+
+            # Calculate target HVAC mode
+            target_hvac_mode: >-
+              {% if heating_off_override_active %}
+                off
+              {% elif window_open %}
+                off
+              {% else %}
+                heat
+              {% endif %}
+
+        # Set HVAC mode if different from current
+        - if:
+            - condition: template
+              value_template: "{{ current_hvac_mode != target_hvac_mode }}"
+          then:
+            - service: climate.set_hvac_mode
+              target:
+                entity_id: "{{ repeat.item }}"
+              data:
+                hvac_mode: "{{ target_hvac_mode }}"
+
+        # Set preset or temperature (only when HVAC mode is not off)
+        - if:
+            - condition: template
+              value_template: "{{ target_hvac_mode != 'off' }}"
+          then:
+            # If using preset modes, set preset; otherwise set temperature
+            - if:
+                - condition: template
+                  value_template: "{{ use_preset_modes }}"
+              then:
+                # Set preset mode if configured, supported, and different from target
+                - if:
+                    - condition: template
+                      value_template: "{{ target_preset | length > 0 and target_preset in supported_presets and current_preset != target_preset }}"
+                  then:
+                    - service: climate.set_preset_mode
+                      target:
+                        entity_id: "{{ repeat.item }}"
+                      data:
+                        preset_mode: "{{ target_preset }}"
+              else:
+                # Set temperature if different from current (tolerance: 0.1°C)
+                - if:
+                    - condition: template
+                      value_template: "{{ (target_temp | float(0) - current_temp) | abs > 0.1 }}"
+                  then:
+                    - service: climate.set_temperature
+                      target:
+                        entity_id: "{{ repeat.item }}"
+                      data:
+                        temperature: "{{ target_temp }}"
+
+mode: single
