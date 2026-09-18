@@ -23,6 +23,8 @@ A smart, reliable Home Assistant blueprint for managing your heating based on pr
 
 Click the button above to import the blueprint directly into your Home Assistant.
 
+**Requires Home Assistant 2024.10 or newer** (enforced on import).
+
 ## 🚀 Quick Start
 
 1. **Create an automation** from the blueprint
@@ -61,12 +63,12 @@ The blueprint uses a base comfort temperature with two optional overlays:
 
 **Frost Protection:**
 - Activates manually via override, or automatically after everyone is away for the configured duration
-- Uses optional datetime helper for persistence across HA restarts
+- Automatic activation requires the datetime helper; without it, only the manual override works
 - Automatically deactivates when anyone returns home
 
-## ⏱️ Optional: Frost Protection Helper
+## ⏱️ Frost Protection Helper
 
-For reliable frost protection across HA restarts, create a datetime helper:
+Automatic frost protection needs a datetime helper. Skip this if you only use the manual override.
 
 **1. Create Helper**
 
@@ -74,20 +76,22 @@ Go to **Settings** → **Devices & Services** → [**Helpers**](https://my.home-
 
 Create a **Date and/or time** helper:
 - **Has date:** ✅ Enabled
-- **Has time:** ✅ Enabled
+- **Has time:** ✅ Enabled (a time-only helper cannot hold the countdown and disables automatic frost protection)
 - Example: `input_datetime.frost_protection_schedule`
 
 **2. Configure in Blueprint**
 
 Select your datetime helper in the **Frost Protection DateTime Helper (Optional)** field.
 
-**Why?** The helper persists the scheduled activation time across restarts, preventing the duration timer from resetting.
+**Why?** The helper holds the time frost protection should start. It survives restarts, so the countdown does not reset. A time in the past means active; `1970-01-01 00:00:00` means nothing is scheduled.
 
 ## 🎛️ Configuration Tips
 
 - **Durations:** Set person away duration longer (10-30 min) to avoid triggering on brief exits
 - **Guest Mode:** Perfect for visitors - acts like someone being home
-- **Window Detection:** Heating turns off immediately when windows open
+- **Window Detection:** Heating turns off once a window has been open for the Window Open Duration (default 30s). A run started by anything else while a window is open turns it off straight away.
+- **Preset Modes:** When enabled, only presets are sent, never temperatures. A preset the thermostat doesn't list in its `preset_modes` is skipped, so check the names match your device.
+- **Named zones:** Leaving for a zone such as "Work" counts as away, same as `not_home`.
 
 ## 🤝 Support
 
@@ -161,12 +165,11 @@ How presence is determined based on configuration:
 - **Rationale:** Frost protection mode = house empty (not just "no motion in room")
 
 **Window Detection:**
-- Any window/door sensor showing "open" → Immediately turns heating **OFF**
-- Resumes normal operation when all windows/doors close
+- Any window/door sensor open for the Window Open Duration → Turns heating **OFF**
+- Resumes normal operation once all windows/doors have been closed for the Window Close Duration
 
 **Overrides:**
-- **Window/Door Open** → Highest priority! Immediately forces HVAC **OFF** (overrides everything including frost protection)
-- **Heating Off Override** → Forces HVAC mode to **OFF** (second highest priority, overrides frost protection)
+- **Heating Off Override** and **Window/Door Open** → Both force HVAC mode **OFF**, overriding everything including frost protection
 - **Frost Protection Override** → Forces frost protection mode (highest priority for temperature when heating is allowed)
 - All overrides persist until conditions change or you manually turn them off
 
