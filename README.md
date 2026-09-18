@@ -1,6 +1,6 @@
 # 🔥 Heating Control Blueprint
 
-**Version 1.0**
+**Version 1.1**
 
 A smart, reliable Home Assistant blueprint for managing your heating based on presence, schedules, and real-world conditions.
 
