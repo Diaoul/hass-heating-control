@@ -1,6 +1,6 @@
 # 🔥 Heating Control Blueprint
 
-**Version 1.1**
+**Version 1.2**
 
 A smart, reliable Home Assistant blueprint for managing your heating based on presence, schedules, and real-world conditions.
 
@@ -39,7 +39,7 @@ The blueprint organizes all settings into collapsible sections for easy configur
 
 The blueprint uses a **priority-based system**:
 
-1. **Heating off override** → Heating turns **OFF** (highest priority)
+1. **Heating off override** → Any selected entity ON turns heating **OFF** (highest priority)
 2. **Window/door open** → Heating **OFF**
 3. **Frost protection** → Uses frost protection temperature
 4. **Schedule + presence** → Uses comfort/boost/away temperature based on schedule and presence
@@ -113,7 +113,7 @@ The blueprint evaluates conditions in priority order (highest to lowest):
 
 | Priority | Condition | Temperature | HVAC Mode |
 |----------|-----------|-------------|-----------|
-| 1️⃣ **Highest** | Heating Off Override ON | - | **Off** |
+| 1️⃣ **Highest** | Heating Off Override — any entity ON | - | **Off** |
 | 2️⃣ | Window/Door Open | - | **Off** |
 | 3️⃣ | Frost Protection Override ON | Frost | Heat |
 | 4️⃣ | Frost Protection Scheduled (datetime reached) | Frost | Heat |
@@ -170,6 +170,7 @@ How presence is determined based on configuration:
 
 **Overrides:**
 - **Heating Off Override** and **Window/Door Open** → Both force HVAC mode **OFF**, overriding everything including frost protection
+- **Heating Off Override** accepts several entities, OR-ed: heating stays off while *any* of them is ON. Lets a load-shedding automation, a manual toggle and a seasonal sensor each turn a room off without fighting over one shared boolean
 - **Frost Protection Override** → Forces frost protection mode (highest priority for temperature when heating is allowed)
 - All overrides persist until conditions change or you manually turn them off
 

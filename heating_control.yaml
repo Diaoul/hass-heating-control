@@ -327,7 +327,7 @@ blueprint:
       input:
         heating_off_override:
           name: 🛑 Heating Off Override
-          description: Toggle to turn off all heating (sets HVAC mode to off). Takes effect whatever the schedule, presence or frost protection state.
+          description: Any of these ON turns off all heating (sets HVAC mode to off). Takes effect whatever the schedule, presence or frost protection state.
           default: []
           selector:
             entity:
@@ -336,7 +336,7 @@ blueprint:
                     - input_boolean
                     - switch
                     - binary_sensor
-              multiple: false
+              multiple: true
 
         frost_protection_override:
           name: ❄️ Manual Frost Protection Override
@@ -405,7 +405,7 @@ variables:
     {{ guest_mode | length > 0 and is_state(guest_mode, 'on') }}
 
   heating_off_override_active: >-
-    {{ heating_off_override | length > 0 and is_state(heating_off_override, 'on') }}
+    {{ expand(heating_off_override) | selectattr('state', 'eq', 'on') | list | count > 0 }}
 
   frost_protection_override_active: >-
     {{ frost_protection_override | length > 0 and is_state(frost_protection_override, 'on') }}

@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-09-20
+
+### Added
+
+- `heating_off_override` accepts multiple entities instead of one. They are
+  OR-ed: heating is off while *any* of them is on. A room can then be turned
+  off independently by, say, a load-shedding automation and a manual toggle,
+  rather than having them share one boolean and overwrite each other.
+
+  Existing automations are unaffected and need no edit: a stored single entity
+  id still works, because `expand()` accepts a bare entity id as well as a
+  list. The input key and its selector domains are unchanged, so this is
+  additive, not breaking. Re-import the blueprint to pick it up; only then does
+  the UI offer more than one entity.
+
 ## [1.1.0] - 2026-09-19
 
 ### Fixed
