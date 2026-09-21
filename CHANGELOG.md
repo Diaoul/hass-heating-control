@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-09-21
+
+### Added
+
+- Optional `status_entity`, in a new Status section: an `input_select` the
+  automation sets to the mode it just applied — `Comfort`, `Comfort Boosted`,
+  `Eco`, `Away`, `Frost Protection`, `Window Open` or `Off` — so a dashboard can
+  show why the heating is doing what it is doing without re-deriving the whole
+  priority chain in a template.
+
+  Leaving it empty keeps the previous behaviour exactly; nothing is written and
+  no helper is needed. The mode is computed in the same action-level
+  `variables:` step as `target_temp`, with the same branch order plus the two
+  HVAC-off cases in front, so the reported mode cannot disagree with the
+  commanded one. It is written last, after the thermostats, and only when it
+  differs from the helper's current state, so a steady state leaves no logbook
+  entry. The call is `continue_on_error`, so a helper missing an option keeps
+  its previous value instead of failing the run — the heating is already
+  commanded by that point.
+
+  Tradeoff: the option strings are fixed and case-sensitive. An `input_text`
+  would not need them to match, but gives no known option set to style or
+  filter on in a dashboard.
+
 ## [1.2.0] - 2026-09-20
 
 ### Added

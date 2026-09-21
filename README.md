@@ -1,6 +1,6 @@
 # 🔥 Heating Control Blueprint
 
-**Version 1.2**
+**Version 1.3**
 
 A smart, reliable Home Assistant blueprint for managing your heating based on presence, schedules, and real-world conditions.
 
@@ -18,6 +18,7 @@ A smart, reliable Home Assistant blueprint for managing your heating based on pr
 - 🎭 **Guest Mode** - Acts like an additional person entity for presence detection
 - 🎯 **Preset Support** - Optionally use your thermostat's built-in preset modes
 - ⏱️ **Configurable Durations** - Fine-tune timing for all state changes
+- 📊 **Status Helper** - Optionally report the applied mode to an `input_select` for dashboards
 
 ## 📦 Installation
 
@@ -32,6 +33,7 @@ Click the button above to import the blueprint directly into your Home Assistant
 3. **Set your temperatures** - comfort and eco base temperatures, plus optional boost/away offsets
 4. **Choose presence detection** - person entities and/or binary sensor
 5. **(Optional)** Configure schedule, windows, and frost protection
+6. **(Optional)** Point the Status section at an `input_select` to show the mode on a dashboard
 
 The blueprint organizes all settings into collapsible sections for easy configuration.
 
@@ -111,20 +113,23 @@ If you encounter issues:
 
 The blueprint evaluates conditions in priority order (highest to lowest):
 
-| Priority | Condition | Temperature | HVAC Mode |
-|----------|-----------|-------------|-----------|
-| 1️⃣ **Highest** | Heating Off Override — any entity ON | - | **Off** |
-| 2️⃣ | Window/Door Open | - | **Off** |
-| 3️⃣ | Frost Protection Override ON | Frost | Heat |
-| 4️⃣ | Frost Protection Scheduled (datetime reached) | Frost | Heat |
-| 5️⃣ | Schedule Defined + Active + Present | Comfort + boost offset* | Heat |
-| 6️⃣ | Schedule Defined + Active + Away | Comfort + away offset** | Heat |
-| 7️⃣ | Schedule Defined + Inactive | Eco | Heat |
-| 8️⃣ | No Schedule + Present | Comfort + boost offset* | Heat |
-| 9️⃣ **Lowest** | No Schedule + Away | Eco | Heat |
+| Priority | Condition | Temperature | HVAC Mode | Status |
+|----------|-----------|-------------|-----------|--------|
+| 1️⃣ **Highest** | Heating Off Override — any entity ON | - | **Off** | `Off` |
+| 2️⃣ | Window/Door Open | - | **Off** | `Window Open` |
+| 3️⃣ | Frost Protection Override ON | Frost | Heat | `Frost Protection` |
+| 4️⃣ | Frost Protection Scheduled (datetime reached) | Frost | Heat | `Frost Protection` |
+| 5️⃣ | Schedule Defined + Active + Present | Comfort + boost offset* | Heat | `Comfort` / `Comfort Boosted`* |
+| 6️⃣ | Schedule Defined + Active + Away | Comfort + away offset** | Heat | `Away` |
+| 7️⃣ | Schedule Defined + Inactive | Eco | Heat | `Eco` |
+| 8️⃣ | No Schedule + Present | Comfort + boost offset* | Heat | `Comfort` / `Comfort Boosted`* |
+| 9️⃣ **Lowest** | No Schedule + Away | Eco | Heat | `Eco` |
 
-*Boost offset: default +1°C, only applied when boost schedule/sensor is active
+*Boost offset: default +1°C, only applied when boost schedule/sensor is active; the status is `Comfort Boosted` exactly when that offset is applied
 **Away offset: default -1°C, or eco temperature if offset is 0
+
+The Status column is only written when a Status Entity is configured; it shares
+the branch order above with the temperature, so the two cannot disagree.
 
 ### Presence Detection Priority
 
@@ -167,6 +172,13 @@ How presence is determined based on configuration:
 **Window Detection:**
 - Any window/door sensor open for the Window Open Duration → Turns heating **OFF**
 - Resumes normal operation once all windows/doors have been closed for the Window Close Duration
+
+**Status Entity:**
+- Entirely optional. Leave it empty and nothing is written; every other behaviour is identical
+- When set, the applied mode is written to an `input_select` after the thermostats have been commanded, so the helper reflects a run that reached them
+- The helper must offer exactly these options (capitalisation included): `Comfort`, `Comfort Boosted`, `Eco`, `Away`, `Frost Protection`, `Window Open`, `Off`
+- Written only when the mode changed, so a steady state leaves no logbook entry
+- An option missing from the helper is not written and the helper keeps its previous value; the run continues and the heating is unaffected
 
 **Overrides:**
 - **Heating Off Override** and **Window/Door Open** → Both force HVAC mode **OFF**, overriding everything including frost protection

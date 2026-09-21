@@ -13,6 +13,7 @@ blueprint:
     - 🎭 Guest mode
     - 🎯 Optional preset mode support
     - ⏱️ Configurable durations for all state changes
+    - 📊 Optional status helper reporting the applied mode
 
     **Automatic frost protection needs a date-and-time helper.** Without one,
     only the manual frost protection override works.
@@ -351,6 +352,28 @@ blueprint:
                     - binary_sensor
               multiple: false
 
+    status:
+      name: Status
+      icon: mdi:eye
+      collapsed: true
+      input:
+        status_entity:
+          name: 📊 Status Entity
+          description: >-
+            Optional input_select updated with the mode this automation just
+            applied, for dashboards. Create it with exactly these options, in
+            any order: Comfort, Comfort Boosted, Eco, Away, Frost Protection,
+            Window Open, Off. Capitalisation matters. An option that does not
+            exist is simply not written and the helper keeps its previous
+            value.
+          default: []
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - input_select
+              multiple: false
+
 variables:
   # Thermostats & Temperatures
   climate_target: !input climate_target
@@ -389,6 +412,9 @@ variables:
   # Manual Overrides
   heating_off_override: !input heating_off_override
   frost_protection_override: !input frost_protection_override
+
+  # Status
+  status_entity: !input status_entity
 
   # A manual "Run actions" supplies a trigger with no id
   trigger_id: "{{ trigger.id | default('', true) }}"
@@ -642,6 +668,26 @@ actions:
           heat
         {% endif %}
 
+      # Branch order has to stay identical to target_temp, with the two
+      # hvac-off cases from target_hvac_mode in front: a status that disagrees
+      # with what was commanded is worse than no status at all
+      target_mode: >-
+        {% if heating_off_override_active %}
+          Off
+        {% elif window_open %}
+          Window Open
+        {% elif frost_protection_active %}
+          Frost Protection
+        {% elif schedule_active and presence_detected %}
+          {{ 'Comfort Boosted' if boost_active else 'Comfort' }}
+        {% elif schedule_active %}
+          Away
+        {% elif schedule_entity | length == 0 and presence_detected %}
+          {{ 'Comfort Boosted' if boost_active else 'Comfort' }}
+        {% else %}
+          Eco
+        {% endif %}
+
   # Looped per entity rather than passing climate_target straight to the
   # actions: each entity's current state is compared before commanding it, so
   # a steady state sends nothing to cloud-backed integrations
@@ -695,5 +741,20 @@ actions:
                             entity_id: "{{ repeat.item }}"
                           data:
                             temperature: "{{ target_temp | float }}"
+
+  # Last, so the helper reflects a run that actually reached the thermostats.
+  # Compared before writing, like the climate commands, so a steady state
+  # leaves no logbook entry.
+  - if:
+      - "{{ status_entity | length > 0 and states(status_entity) != target_mode }}"
+    then:
+      - action: input_select.select_option
+        # An option missing from the helper must not stop the run; the heating
+        # is already commanded by this point either way
+        continue_on_error: true
+        target:
+          entity_id: "{{ status_entity }}"
+        data:
+          option: "{{ target_mode }}"
 
 mode: single
