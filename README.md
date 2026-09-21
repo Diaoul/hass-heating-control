@@ -1,6 +1,6 @@
 # 🔥 Heating Control Blueprint
 
-**Version 1.3**
+**Version 1.3.1**
 
 A smart, reliable Home Assistant blueprint for managing your heating based on presence, schedules, and real-world conditions.
 
@@ -18,7 +18,7 @@ A smart, reliable Home Assistant blueprint for managing your heating based on pr
 - 🎭 **Guest Mode** - Acts like an additional person entity for presence detection
 - 🎯 **Preset Support** - Optionally use your thermostat's built-in preset modes
 - ⏱️ **Configurable Durations** - Fine-tune timing for all state changes
-- 📊 **Status Helper** - Optionally report the applied mode to an `input_select` for dashboards
+- 📊 **Status Helper** - Optionally report the mode the thermostats actually took to an `input_select` for dashboards
 
 ## 📦 Installation
 
@@ -129,7 +129,9 @@ The blueprint evaluates conditions in priority order (highest to lowest):
 **Away offset: default -1°C, or eco temperature if offset is 0
 
 The Status column is only written when a Status Entity is configured; it shares
-the branch order above with the temperature, so the two cannot disagree.
+the branch order above with the temperature, so the two cannot disagree. It is
+also written only once the thermostats have taken the target, so it reports what
+happened rather than what was decided — see **Status Entity** below.
 
 ### Presence Detection Priority
 
@@ -175,8 +177,13 @@ How presence is determined based on configuration:
 
 **Status Entity:**
 - Entirely optional. Leave it empty and nothing is written; every other behaviour is identical
-- When set, the applied mode is written to an `input_select` after the thermostats have been commanded, so the helper reflects a run that reached them
 - The helper must offer exactly these options (capitalisation included): `Comfort`, `Comfort Boosted`, `Eco`, `Away`, `Frost Protection`, `Window Open`, `Off`
+- **The helper reports what the thermostats took, not what was decided.** It is written only once every reachable climate entity agrees with the target — HVAC mode, plus preset or temperature to match how the entity is driven
+- Consequences of that, worth understanding before putting it on a dashboard:
+  - It **lags a change** by however long the integration takes to report the new state. The run that commands a change usually reads back stale and writes nothing; the entity's own state change triggers the next run, which writes
+  - A command the thermostat or its cloud **rejects leaves the helper on its previous value**. Stale, but it never claims a mode the heating never took. The failure is visible in the trace and the logbook instead
+  - A thermostat changed **by hand** to something the automation did not ask for holds the helper back until the next run corrects it
+  - If **every** climate entity is unavailable, nothing is written
 - Written only when the mode changed, so a steady state leaves no logbook entry
 - An option missing from the helper is not written and the helper keeps its previous value; the run continues and the heating is unaffected
 

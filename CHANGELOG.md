@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-09-21
+
+### Fixed
+
+- The status helper claimed a mode the thermostats had refused. Every climate
+  command carries `continue_on_error`, so a call rejected by the vendor cloud
+  left the run to continue and publish anyway. Observed on an Overkiz account
+  out of quota: both `climate.set_hvac_mode` and `climate.set_temperature`
+  returned `{'errorCode': 'QUOTA_EXCEEDED'}`, the heater stayed off at 20.5°C,
+  and the helper was set to `Eco` regardless — the dashboard stating a mode the
+  heating never took.
+
+  The publish is now gated on reading the entities back: it writes only once
+  every reachable climate entity agrees with the target, comparing HVAC mode
+  plus preset or temperature exactly as the commands do. Home Assistant gives a
+  script no way to see that a `continue_on_error` call failed, so agreement is
+  the only observable evidence a command landed.
+
+  Tradeoffs, in order of how often they will be noticed. The helper now **lags**
+  a change by the integration's polling delay: the run that commands a change
+  reads back stale and writes nothing, and the entity's own state change
+  triggers the next run, which writes. A thermostat that cannot be commanded
+  holds the helper on its previous value — stale rather than wrong, with the
+  failure visible in the trace. A thermostat changed by hand does the same until
+  the next run corrects it. Nothing is written when every entity is unavailable.
+
+  `continue_on_error` was deliberately kept on the climate calls. Dropping it
+  would make a rejected command abort the run, which is simpler and equally
+  truthful, but in a room with more than one heater it would skip every
+  remaining entity — including frost protection, the safety output — during
+  exactly the cloud outage that motivates the change.
+
 ## [1.3.0] - 2026-09-21
 
 ### Added

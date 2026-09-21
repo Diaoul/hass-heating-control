@@ -360,12 +360,16 @@ blueprint:
         status_entity:
           name: 📊 Status Entity
           description: >-
-            Optional input_select updated with the mode this automation just
-            applied, for dashboards. Create it with exactly these options, in
-            any order: Comfort, Comfort Boosted, Eco, Away, Frost Protection,
-            Window Open, Off. Capitalisation matters. An option that does not
-            exist is simply not written and the helper keeps its previous
-            value.
+            Optional input_select updated with the mode the thermostats have
+            actually taken, for dashboards. Create it with exactly these
+            options, in any order: Comfort, Comfort Boosted, Eco, Away, Frost
+            Protection, Window Open, Off. Capitalisation matters.
+
+            Written only once every reachable thermostat agrees with the
+            target, so it lags a change by the integration's polling delay, and
+            holds its previous value while a thermostat cannot be commanded --
+            stale rather than wrong. An option that does not exist is not
+            written either, and the helper keeps its previous value.
           default: []
           selector:
             entity:
@@ -742,11 +746,40 @@ actions:
                           data:
                             temperature: "{{ target_temp | float }}"
 
-  # Last, so the helper reflects a run that actually reached the thermostats.
-  # Compared before writing, like the climate commands, so a steady state
-  # leaves no logbook entry.
+  # Read back rather than trusting the commands above. continue_on_error hides
+  # a rejected call -- a cloud API refusing on quota is the observed case -- and
+  # Home Assistant offers no way to see that from inside the script, so the only
+  # evidence a command landed is the entity agreeing with the target. The
+  # comparisons below must mirror the commands: same skip of unavailable
+  # entities, same preset-or-temperature split, same 0.1 tolerance.
+  - variables:
+      status_confirmed: >-
+        {% set ns = namespace(available=0, mismatched=0) %}
+        {% for entity in climate_target if has_value(entity) %}
+          {% set ns.available = ns.available + 1 %}
+          {% if states(entity) != target_hvac_mode %}
+            {% set ns.mismatched = ns.mismatched + 1 %}
+          {% elif target_hvac_mode != 'off' %}
+            {% if use_preset_modes %}
+              {% set presets = state_attr(entity, 'preset_modes') or [] %}
+              {% if target_preset in presets and state_attr(entity, 'preset_mode') != target_preset %}
+                {% set ns.mismatched = ns.mismatched + 1 %}
+              {% endif %}
+            {% elif (target_temp | float - (state_attr(entity, 'temperature') | float(0))) | abs > 0.1 %}
+              {% set ns.mismatched = ns.mismatched + 1 %}
+            {% endif %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.available > 0 and ns.mismatched == 0 }}
+
+  # Only once the thermostats agree, so a rejected command leaves the helper on
+  # its previous value: stale, but never claiming a mode the heating never took.
+  # A run that changed something reads back stale and publishes on the next run,
+  # which the climate state change itself triggers.
   - if:
-      - "{{ status_entity | length > 0 and states(status_entity) != target_mode }}"
+      - >-
+        {{ status_entity | length > 0 and status_confirmed
+           and states(status_entity) != target_mode }}
     then:
       - action: input_select.select_option
         # An option missing from the helper must not stop the run; the heating
