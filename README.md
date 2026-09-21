@@ -1,6 +1,6 @@
 # 🔥 Heating Control Blueprint
 
-**Version 1.3.1**
+**Version 1.4**
 
 A smart, reliable Home Assistant blueprint for managing your heating based on presence, schedules, and real-world conditions.
 
@@ -17,7 +17,7 @@ A smart, reliable Home Assistant blueprint for managing your heating based on pr
 - ❄️ **Frost Protection** - Keep your home safe during vacations with automatic low-temperature mode
 - 🎭 **Guest Mode** - Acts like an additional person entity for presence detection
 - 🎯 **Preset Support** - Optionally use your thermostat's built-in preset modes
-- ⏱️ **Configurable Durations** - Fine-tune timing for all state changes
+- ⏱️ **Configurable Durations** - Fine-tune timing for all state changes, including a debounce on climate entities coming back online
 - 📊 **Status Helper** - Optionally report the mode the thermostats actually took to an `input_select` for dashboards
 
 ## 📦 Installation
@@ -170,6 +170,12 @@ How presence is determined based on configuration:
   - Automatically deactivates when anyone returns home OR guest mode turns on
 - **Remote pre-heating tip:** When away and frost protection is active, turn the override toggle OFF remotely (via HA app) to cancel frost protection and pre-heat your home before returning. The system includes a safeguard: if you're still away, frost protection will automatically reschedule for the configured duration (preventing energy waste if plans change).
 - **Rationale:** Frost protection mode = house empty (not just "no motion in room")
+
+**Climate Availability:**
+- The automation re-runs when a climate entity comes back from `unavailable`, so a room reconciles after an integration reconnects
+- **Climate Available Duration** (default 30 s) is how long the entity must *stay* available first. A cloud integration being rate-limited flaps between available and unavailable, sometimes for a fraction of a second at a time; without the delay, every blip starts a run that re-sends the very commands that caused the rate limit
+- An ordinary state change during the wait does not cancel it — the entity only has to avoid going back to `unavailable`
+- Set it to 0 to react immediately. Raise it if your integration flaps for longer than 30 s at a time
 
 **Window Detection:**
 - Any window/door sensor open for the Window Open Duration → Turns heating **OFF**

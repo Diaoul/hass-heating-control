@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-09-21
+
+### Added
+
+- `climate_available_duration` (default 30 s): how long a climate entity must
+  stay available before the automation reacts to it returning. The availability
+  trigger previously had no `for:`, so a blip of any length started a full run.
+
+  Measured on an Overkiz (Atlantic Cozytouch) account that had run out of API
+  quota: all eight entities on the hub went available for about 190 ms once
+  every 30 s, in lockstep. Each of those blips fired this trigger in all seven
+  rooms at once, each run re-sent the commands the vendor had just rejected, and
+  those commands drove the quota that caused the flapping — roughly 1950
+  commands per hour during a burst, against a cloud that was already refusing
+  them. The `for:` breaks that loop: a flapping integration never satisfies it,
+  while a genuine recovery fires once the entity has settled.
+
+  Existing automations get the 30 s default on re-import and need no edit. Set
+  it to 0 for the previous behaviour.
+
+  The `for:` does not restart on ordinary state changes. Home Assistant's state
+  trigger tests `cur_value != old_value` when `from:` is set without `to:`, so
+  the entity only has to avoid returning to `unavailable`; a setpoint or mode
+  change during the wait leaves the countdown running.
+
+  Not the whole story: the amplification is driven as much by the Overkiz
+  integration, which calls the unthrottled `coordinator.async_refresh()` after
+  every successful command instead of the debounced
+  `async_request_refresh()`, and applies no backoff when the API returns
+  `TooManyRequestsError`. That is being reported upstream. This change stops the
+  blueprint feeding it.
+
 ## [1.3.1] - 2026-09-21
 
 ### Fixed

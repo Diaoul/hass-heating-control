@@ -36,6 +36,23 @@ blueprint:
                 - domain: climate
               multiple: true
 
+        climate_available_duration:
+          name: ⏱️ Climate Available Duration
+          description: >-
+            How long a climate entity must stay available before the automation
+            reacts to it returning. A cloud integration that is being
+            rate-limited flaps between available and unavailable, sometimes for
+            only a fraction of a second at a time; without this delay every blip
+            starts a run that re-sends the commands that caused the rate limit
+            in the first place. Set it to 0 to react immediately.
+          default:
+            hours: 0
+            minutes: 0
+            seconds: 30
+          selector:
+            duration:
+              enable_day: false
+
         comfort_temperature:
           name: 🛋️ Comfort Temperature
           description: Target temperature when home and schedule is active
@@ -490,6 +507,11 @@ triggers:
     event: start
     id: ha_start
 
+  # for: holds as long as the entity does not go back to the from-state, so an
+  # ordinary state change during the wait does not cancel it (see the state
+  # trigger's _check_same_state: with from: and no to:, the test is
+  # "still not unavailable"). A flapping cloud integration therefore never
+  # fires this, while a real recovery fires once the entity has settled.
   - trigger: state
     entity_id: !input climate_target
     from:
@@ -498,6 +520,7 @@ triggers:
     not_to:
       - unavailable
       - unknown
+    for: !input climate_available_duration
     id: climate_available
 
   # not_to rather than to: "not_home", so leaving for a named zone ("Work")
