@@ -15,8 +15,10 @@ blueprint:
     - ⏱️ Configurable durations for all state changes
     - 📊 Optional status helper reporting the applied mode
 
-    **Automatic frost protection needs a date-and-time helper.** Without one,
-    only the manual frost protection override works.
+    **Automatic frost protection needs a date-and-time helper, and person
+    entities or guest mode.** Without the helper, or with no presence input to
+    tell it the house is empty, only the manual frost protection override
+    works.
   domain: automation
   source_url: https://github.com/Diaoul/hass-heating-control/blob/main/heating_control.yaml
   homeassistant:
@@ -289,6 +291,12 @@ blueprint:
 
             If not configured, automatic frost protection is disabled (manual override still works).
 
+            **It also needs person entities or guest mode.** Automatic frost
+            protection asks whether the house is empty, and with no presence
+            input configured there is nothing to answer that, so it never
+            activates -- the manual override remains the only way in. A room
+            sensor alone does not count: an empty room is not an empty house.
+
             Create your helper [here](https://my.home-assistant.io/redirect/helpers/).
           default: []
           selector:
@@ -477,6 +485,17 @@ variables:
       {{ true }}
     {% endif %}
 
+  # Frost protection asks whether the house is empty, which only has an answer
+  # when presence is configured. presence_detected assumes someone is in when
+  # nothing is configured, so this has to agree: otherwise a room with no
+  # presence sources arms a countdown that person_returned/guest_arrived can
+  # never clear, because neither trigger has an entity to fire on. The room
+  # sensor is deliberately not consulted -- an empty house is not the same as
+  # an empty room.
+  house_empty: >-
+    {{ (presence_persons | length > 0 or guest_mode | length > 0)
+       and not (any_person_home or guest_mode_active) }}
+
   schedule_active: >-
     {{ schedule_entity | length > 0 and is_state(schedule_entity, 'on') }}
 
@@ -613,7 +632,7 @@ actions:
   # the past means active, the epoch means nothing is scheduled.
   - if:
       - "{{ trigger_id in ['person_left', 'guest_left'] and frost_protection_datetime_helper | length > 0 }}"
-      - "{{ not (any_person_home or guest_mode_active) }}"
+      - "{{ house_empty }}"
     then:
       - action: input_datetime.set_datetime
         target:
@@ -643,7 +662,7 @@ actions:
           entity_id: "{{ frost_protection_datetime_helper }}"
         data:
           datetime: >-
-            {% if not (any_person_home or guest_mode_active) %}
+            {% if house_empty %}
               {{ (now() + timedelta(**frost_protection_duration)).strftime('%Y-%m-%d %H:%M:%S') }}
             {% else %}
               1970-01-01 00:00:00

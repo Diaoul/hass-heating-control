@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] - 2026-09-22
+
+### Fixed
+
+- A room with no person entities and no guest mode could arm a frost protection
+  countdown that nothing was able to clear, freezing it at the frost temperature
+  indefinitely.
+
+  The countdown guard asked `not (any_person_home or guest_mode_active)`. With
+  no presence input configured both are false, so the guard read "house empty"
+  and armed the countdown — while `presence_detected` assumed the opposite and
+  reported *present*. Two contradictory answers to the same question.
+
+  It was also a one-way door: only `person_returned` and `guest_arrived` clear
+  the helper, and neither trigger has an entity to fire on in such a room.
+  Turning the frost protection override off re-armed it rather than releasing
+  it, so there was no way out from the UI.
+
+  Observed on a laundry room configured with no presence input: armed when the
+  vacation toggle was switched off, and held at 12°C against a configured 14°C
+  for two days until the helper was reset by hand. A guest bathroom configured
+  with guest mode is unaffected — that room has a presence input, so both sides
+  agree and the countdown clears when guests arrive.
+
+  The guard now requires a presence input to be configured before it will call
+  the house empty, matching what `presence_detected` already assumed. A room
+  sensor alone still does not count: an empty room is not an empty house.
+
+  If a room is already stuck, re-import is not enough — reset its datetime
+  helper to `1970-01-01 00:00:00` once, or the past timestamp still reads as
+  active.
+
+### Changed
+
+- Documented, in the blueprint description, the datetime helper's own
+  description and the README, that automatic frost protection needs a presence
+  input as well as the helper.
+
 ## [1.4.0] - 2026-09-21
 
 ### Added

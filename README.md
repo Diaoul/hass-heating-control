@@ -1,6 +1,6 @@
 # 🔥 Heating Control Blueprint
 
-**Version 1.4**
+**Version 1.4.1**
 
 A smart, reliable Home Assistant blueprint for managing your heating based on presence, schedules, and real-world conditions.
 
@@ -65,12 +65,12 @@ The blueprint uses a base comfort temperature with two optional overlays:
 
 **Frost Protection:**
 - Activates manually via override, or automatically after everyone is away for the configured duration
-- Automatic activation requires the datetime helper; without it, only the manual override works
+- Automatic activation requires **two** things: the datetime helper, *and* person entities or guest mode. Without either, only the manual override works
 - Automatically deactivates when anyone returns home
 
 ## ⏱️ Frost Protection Helper
 
-Automatic frost protection needs a datetime helper. Skip this if you only use the manual override.
+Automatic frost protection needs a datetime helper **and** a presence input — person entities, guest mode, or both. Skip this if you only use the manual override.
 
 **1. Create Helper**
 
@@ -165,6 +165,8 @@ How presence is determined based on configuration:
 - **Manual activation:** Toggle the Frost Protection Override input boolean anytime
 - **Automatic activation:** When everyone is away (persons AND guest mode) for the configured frost protection duration
   - Considers: Person entities + Guest Mode
+  - **Requires at least one of them.** "Is the house empty?" has no answer when no presence input is configured, so such a room never activates frost protection automatically. It is deliberately the same assumption presence detection makes — with nothing configured, presence defaults to *present* — and the two must agree, or a room could arm a countdown that nothing is able to clear
+  - A presence sensor alone does not enable it: an empty room is not an empty house
   - **Does NOT consider:** Presence sensor (room motion doesn't affect frost protection)
   - Uses datetime helper (optional but recommended) for persistence across HA restarts
   - Automatically deactivates when anyone returns home OR guest mode turns on
