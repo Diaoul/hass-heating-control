@@ -1,6 +1,6 @@
 # 🔥 Heating Control Blueprint
 
-**Version 1.4.1**
+**Version 1.4.2**
 
 A smart, reliable Home Assistant blueprint for managing your heating based on presence, schedules, and real-world conditions.
 
@@ -188,7 +188,8 @@ How presence is determined based on configuration:
 - The helper must offer exactly these options (capitalisation included): `Comfort`, `Comfort Boosted`, `Eco`, `Away`, `Frost Protection`, `Window Open`, `Off`
 - **The helper reports what the thermostats took, not what was decided.** It is written only once every reachable climate entity agrees with the target — HVAC mode, plus preset or temperature to match how the entity is driven
 - Consequences of that, worth understanding before putting it on a dashboard:
-  - It **lags a change** by however long the integration takes to report the new state. The run that commands a change usually reads back stale and writes nothing; the entity's own state change triggers the next run, which writes
+  - It **lags a change** by however long the integration takes to report the new state, **and then until something triggers the next run**. No trigger watches the climate entities themselves, so the helper sits on its previous value until an input entity changes, a schedule flips, someone comes or goes, or Home Assistant restarts
+  - On a cloud-backed integration that wait can be long. Measured on Overkiz: after a load-shedding run turned every room off, each helper still reported its previous mode 15 minutes later. Treat it as a record of the last confirmed mode, not a live view
   - A command the thermostat or its cloud **rejects leaves the helper on its previous value**. Stale, but it never claims a mode the heating never took. The failure is visible in the trace and the logbook instead
   - A thermostat changed **by hand** to something the automation did not ask for holds the helper back until the next run corrects it
   - If **every** climate entity is unavailable, nothing is written

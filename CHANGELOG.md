@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.2] - 2026-09-26
+
+### Fixed
+
+- Documentation only; no behaviour change. The blueprint and the README both
+  claimed the status helper is published on "the next run, which the climate
+  state change itself triggers". No such trigger exists, and none ever did:
+  the only trigger on the climate entities fires when one becomes available
+  again. A run that commands a change reads back before a cloud integration has
+  reported the new state, writes nothing, and the helper then waits for an
+  unrelated trigger. Measured on Overkiz: 15 minutes after a load-shedding run
+  turned every room off, every helper still reported its previous mode.
+- The status helper is best read as a record of the last confirmed mode rather
+  than a live view. Both surfaces now say so.
+
 ## [1.4.1] - 2026-09-22
 
 ### Fixed

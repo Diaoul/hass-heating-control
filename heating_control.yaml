@@ -816,8 +816,9 @@ actions:
 
   # Only once the thermostats agree, so a rejected command leaves the helper on
   # its previous value: stale, but never claiming a mode the heating never took.
-  # A run that changed something reads back stale and publishes on the next run,
-  # which the climate state change itself triggers.
+  # Nothing here triggers on the climate entities' own state, so a run that
+  # commanded a change reads back stale and the helper waits for whatever
+  # triggers the next run. On a cloud integration that can be a long wait.
   - if:
       - >-
         {{ status_entity | length > 0 and status_confirmed
