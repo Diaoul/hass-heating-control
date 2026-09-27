@@ -1,6 +1,6 @@
 # 🔥 Heating Control Blueprint
 
-**Version 1.4.2**
+**Version 1.5.0**
 
 A smart, reliable Home Assistant blueprint for managing your heating based on presence, schedules, and real-world conditions.
 
@@ -188,8 +188,8 @@ How presence is determined based on configuration:
 - The helper must offer exactly these options (capitalisation included): `Comfort`, `Comfort Boosted`, `Eco`, `Away`, `Frost Protection`, `Window Open`, `Off`
 - **The helper reports what the thermostats took, not what was decided.** It is written only once every reachable climate entity agrees with the target — HVAC mode, plus preset or temperature to match how the entity is driven
 - Consequences of that, worth understanding before putting it on a dashboard:
-  - It **lags a change** by however long the integration takes to report the new state, **and then until something triggers the next run**. No trigger watches the climate entities themselves, so the helper sits on its previous value until an input entity changes, a schedule flips, someone comes or goes, or Home Assistant restarts
-  - On a cloud-backed integration that wait can be long. Measured on Overkiz: after a load-shedding run turned every room off, each helper still reported its previous mode 15 minutes later. Treat it as a record of the last confirmed mode, not a live view
+  - It **lags a change** by however long the integration takes to report the new state. The blueprint also watches the climate entities' own `temperature` and `preset_mode` attributes, so once the thermostat catches up, that alone re-runs the check and writes the helper — no need to wait for an unrelated input to change
+  - On a cloud-backed integration that first lag can still be real, just no longer indefinite. Measured on Overkiz: a helper used to still report its previous mode 15 minutes after a load-shedding run turned every room off, waiting for an unrelated trigger; it now updates as soon as the thermostat reports the new setpoint. Treat it as a record of the last confirmed mode, not a live view
   - A command the thermostat or its cloud **rejects leaves the helper on its previous value**. Stale, but it never claims a mode the heating never took. The failure is visible in the trace and the logbook instead
   - A thermostat changed **by hand** to something the automation did not ask for holds the helper back until the next run corrects it
   - If **every** climate entity is unavailable, nothing is written

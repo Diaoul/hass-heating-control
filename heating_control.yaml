@@ -542,6 +542,20 @@ triggers:
     for: !input climate_available_duration
     id: climate_available
 
+  # Without these, nothing re-runs once a thermostat catches up to a commanded
+  # setpoint/preset, so the status helper waits on an unrelated trigger. Scoped
+  # to these attributes, not a bare state trigger, to skip current_temperature
+  # (room temp) churn.
+  - trigger: state
+    entity_id: !input climate_target
+    attribute: temperature
+    id: climate_setpoint_changed
+
+  - trigger: state
+    entity_id: !input climate_target
+    attribute: preset_mode
+    id: climate_preset_changed
+
   # not_to rather than to: "not_home", so leaving for a named zone ("Work")
   # counts as leaving
   - trigger: state
