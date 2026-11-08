@@ -80,7 +80,8 @@ any action and would read the stale value.
   untagged. Measured on Overkiz: the report came back 2 s after the command,
   tagged. A hold is the one other piece of state besides frost protection,
   kept in the optional manual hold `input_datetime` with the same epoch
-  convention; without the helper it lasts until the next input trigger.
+  convention; without the helper it lasts until the next input trigger, and a
+  restart or reconnect reconciles it away since nothing records it.
   Holds never apply while `target_hvac_mode` is `off` or frost protection is
   active.
 - Presence triggers use `not_to: home` / `from: home` rather than

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.1] - 2026-11-08
+
+### Fixed
+
+- Documentation only; no behaviour change. 1.6.0 advertised manual changes as
+  held "for a configurable time (default 2 h)" and said a restart does not end
+  a hold. Both hold only with the Manual Change DateTime Helper. Without it,
+  nothing records the hold: it lasts until the next input change, a restart or
+  a reconnect ends it, and the duration only matters as 0 versus not 0. The
+  feature list, the Manual Changes section, the priority table footnote and
+  both input descriptions now say so.
+
 ## [1.6.0] - 2026-11-08
 
 ### Added

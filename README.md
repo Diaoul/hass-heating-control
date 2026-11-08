@@ -1,6 +1,6 @@
 # 🔥 Heating Control Blueprint
 
-**Version 1.6.0**
+**Version 1.6.1**
 
 A smart, reliable Home Assistant blueprint for managing your heating based on presence, schedules, and real-world conditions.
 
@@ -18,7 +18,7 @@ A smart, reliable Home Assistant blueprint for managing your heating based on pr
 - 🎭 **Guest Mode** - Acts like an additional person entity for presence detection
 - 🎯 **Preset Support** - Optionally use your thermostat's built-in preset modes
 - ⏱️ **Configurable Durations** - Fine-tune timing for all state changes, including a debounce on climate entities coming back online
-- 🖐️ **Manual Changes** - A thermostat changed by hand or in its vendor app keeps that setting for a configurable time (default 2 h) instead of being put straight back
+- 🖐️ **Manual Changes** - A thermostat changed by hand or in its vendor app keeps that setting until the next input change, or for a configurable time (default 2 h) with a datetime helper, instead of being put straight back
 - 📊 **Status Helper** - Optionally report the mode the thermostats actually took to an `input_select` for dashboards
 
 ## 📦 Installation
@@ -130,7 +130,7 @@ The blueprint evaluates conditions in priority order (highest to lowest):
 
 *Boost offset: default +1°C, only applied when boost schedule/sensor is active; the status is `Comfort Boosted` exactly when that offset is applied
 **Away offset: default -1°C, or eco temperature if offset is 0
-***Only on the thermostat changed by hand, only for the hold duration, and ended early by any input change; see **Manual Changes** below
+***Only on the thermostat changed by hand, until the next input change (or the hold duration, with the helper); see **Manual Changes** below
 
 The Status column is only written when a Status Entity is configured; it shares
 the branch order above with the temperature, so the two cannot disagree. It is
@@ -203,9 +203,10 @@ How presence is determined based on configuration:
 - An option missing from the helper is not written and the helper keeps its previous value; the run continues and the heating is unaffected
 
 **Manual Changes:**
-- A change made on the thermostat itself, in its vendor app or in the Home Assistant UI — setpoint, preset or HVAC mode — is **held** for the **Manual Change Hold Duration** (default 2 h) instead of being put back. The status helper shows `Manual` meanwhile
-- Any input change ends the hold early and the room reconciles: schedule, presence, guest mode, boost, window, either override, frost protection. A restart or an integration reconnecting does not
-- **Manual Change DateTime Helper** (optional) stores when the hold ends, so it survives a restart and expires on time. Without it, the hold lasts until the next input change
+- A change made on the thermostat itself, in its vendor app or in the Home Assistant UI — setpoint, preset or HVAC mode — is **held** instead of being put back. The status helper shows `Manual` meanwhile
+- Any input change ends the hold and the room reconciles: schedule, presence, guest mode, boost, window, either override, frost protection
+- **Without the Manual Change DateTime Helper**, nothing records that a hold is running: it lasts until that next input change, and a restart or an integration reconnecting also ends it. The **Manual Change Hold Duration** then only matters as 0 (put changes back) or not 0 (hold)
+- **With the helper**, the hold also ends after the **Manual Change Hold Duration** (default 2 h), and survives a restart or reconnect
 - Never held while the heating is **forced off** (heating off override, window open) or in **frost protection**: the thermostat is put back straight away, so a hand on the dial cannot defeat load shedding or heat an empty house
 - Set the duration to 0 to always put manual changes back
 - How a manual change is told apart from the automation's own commands: Home Assistant tags a thermostat's report with the command's context for a few seconds. An untagged report counts as manual only if it disagrees with the target, so a slow integration catching up does not. One case can still be misread: an integration reporting a *previous* command more than a few seconds late, after a newer one was sent

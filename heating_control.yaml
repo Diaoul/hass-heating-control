@@ -389,9 +389,10 @@ blueprint:
             How long a thermostat changed by hand -- on the device or in its
             vendor app -- keeps that setting before the automation takes over
             again. Any change to an input (schedule, presence, window,
-            override) ends the hold earlier. Without the helper below, the
-            hold lasts until that next input change instead. Set it to 0 to
-            put a manual change back straight away. Never applies while the
+            override) ends the hold earlier. Needs the helper below: without
+            it, the hold lasts until that next input change or a restart, and
+            only 0 versus not 0 matters here. Set it to 0 to put a manual
+            change back straight away. Never applies while the
             heating is forced off or in frost protection: those put the
             thermostat back regardless.
           default:
@@ -409,8 +410,8 @@ blueprint:
 
             Input datetime (date and time) recording when a manual change
             hold ends, so the hold survives a Home Assistant restart and
-            expires on time. Without it, a hold lasts until the next input
-            change.
+            expires after the hold duration. Without it, a hold lasts until
+            the next input change, and a restart ends it.
 
             Create your helper [here](https://my.home-assistant.io/redirect/helpers/).
           default: []
