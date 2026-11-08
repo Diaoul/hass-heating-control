@@ -69,17 +69,29 @@ any action and would read the stale value.
 - Targets are computed from current state, not from what triggered the run.
   The `for:` on a window trigger only delays *that* trigger; any other run
   while a window is open turns the heating off straight away.
-- Triggers are event-driven only: restart, a climate entity becoming available,
-  and state changes of every input entity. There is no periodic tick, so a
-  thermostat changed by hand stays changed until the next trigger.
+- Triggers are event-driven only: restart, a climate entity becoming available
+  or reporting its own setpoint/preset/HVAC mode, and state changes of every
+  input entity. There is no periodic tick.
+- A climate entity's own report never sends commands. It either confirms the
+  status (the automation's command caught up) or starts a manual hold. A report
+  is manual when its context has no parent — Home Assistant tags state written
+  within a few seconds of a service call with that call's context — *and* the
+  entity disagrees with the target, since a slow integration's catch-up arrives
+  untagged. Measured on Overkiz: the report came back 2 s after the command,
+  tagged. A hold is the one other piece of state besides frost protection,
+  kept in the optional manual hold `input_datetime` with the same epoch
+  convention; without the helper it lasts until the next input trigger.
+  Holds never apply while `target_hvac_mode` is `off` or frost protection is
+  active.
 - Presence triggers use `not_to: home` / `from: home` rather than
   `to: not_home`, because a person in a named zone has that zone as their state.
-- `mode: single`. An overlapping run is dropped and logs `Already running`.
-  `queued` and `restart` + debounce were considered and deliberately not
-  adopted without data: `queued` replays a burst against stale read-back state
-  and duplicates commands; a debounce is only useful if it outlasts the
-  integration's state lag, which hasn't been measured. Measure before changing.
-  `max_exceeded: silent` is not set so that the drops stay visible.
+- `mode: queued`. A room with several thermostats gets their reports within
+  milliseconds of each other (measured: 8 ms apart on Overkiz); under `single`
+  the second was dropped, so the status was never confirmed and a manual change
+  on that thermostat would have gone unseen. Those runs send nothing, so
+  replaying them is cheap. The cost: two *input* triggers landing together now
+  both run, and the second compares against state the integration has not
+  reported yet, so it can re-send a command once. `single` dropped it instead.
 
 ## Syntax: track current Home Assistant
 

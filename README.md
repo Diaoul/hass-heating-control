@@ -1,6 +1,6 @@
 # 🔥 Heating Control Blueprint
 
-**Version 1.5.0**
+**Version 1.6.0**
 
 A smart, reliable Home Assistant blueprint for managing your heating based on presence, schedules, and real-world conditions.
 
@@ -18,6 +18,7 @@ A smart, reliable Home Assistant blueprint for managing your heating based on pr
 - 🎭 **Guest Mode** - Acts like an additional person entity for presence detection
 - 🎯 **Preset Support** - Optionally use your thermostat's built-in preset modes
 - ⏱️ **Configurable Durations** - Fine-tune timing for all state changes, including a debounce on climate entities coming back online
+- 🖐️ **Manual Changes** - A thermostat changed by hand or in its vendor app keeps that setting for a configurable time (default 2 h) instead of being put straight back
 - 📊 **Status Helper** - Optionally report the mode the thermostats actually took to an `input_select` for dashboards
 
 ## 📦 Installation
@@ -44,8 +45,9 @@ The blueprint uses a **priority-based system**:
 1. **Heating off override** → Any selected entity ON turns heating **OFF** (highest priority)
 2. **Window/door open** → Heating **OFF**
 3. **Frost protection** → Uses frost protection temperature
-4. **Schedule + presence** → Uses comfort/boost/away temperature based on schedule and presence
-5. **No schedule** → Uses comfort/boost (present) or eco (away) temperature
+4. **Manual change held** → A thermostat changed by hand keeps its setting until the hold ends
+5. **Schedule + presence** → Uses comfort/boost/away temperature based on schedule and presence
+6. **No schedule** → Uses comfort/boost (present) or eco (away) temperature
 
 **Temperature Overlays:**
 
@@ -119,19 +121,23 @@ The blueprint evaluates conditions in priority order (highest to lowest):
 | 2️⃣ | Window/Door Open | - | **Off** | `Window Open` |
 | 3️⃣ | Frost Protection Override ON | Frost | Heat | `Frost Protection` |
 | 4️⃣ | Frost Protection Scheduled (datetime reached) | Frost | Heat | `Frost Protection` |
-| 5️⃣ | Schedule Defined + Active + Present | Comfort + boost offset* | Heat | `Comfort` / `Comfort Boosted`* |
-| 6️⃣ | Schedule Defined + Active + Away | Comfort + away offset** | Heat | `Away` |
-| 7️⃣ | Schedule Defined + Inactive | Eco | Heat | `Eco` |
-| 8️⃣ | No Schedule + Present | Comfort + boost offset* | Heat | `Comfort` / `Comfort Boosted`* |
-| 9️⃣ **Lowest** | No Schedule + Away | Eco | Heat | `Eco` |
+| 5️⃣ | Manual Change Held*** | As set by hand | As set by hand | `Manual` |
+| 6️⃣ | Schedule Defined + Active + Present | Comfort + boost offset* | Heat | `Comfort` / `Comfort Boosted`* |
+| 7️⃣ | Schedule Defined + Active + Away | Comfort + away offset** | Heat | `Away` |
+| 8️⃣ | Schedule Defined + Inactive | Eco | Heat | `Eco` |
+| 9️⃣ | No Schedule + Present | Comfort + boost offset* | Heat | `Comfort` / `Comfort Boosted`* |
+| 🔟 **Lowest** | No Schedule + Away | Eco | Heat | `Eco` |
 
 *Boost offset: default +1°C, only applied when boost schedule/sensor is active; the status is `Comfort Boosted` exactly when that offset is applied
 **Away offset: default -1°C, or eco temperature if offset is 0
+***Only on the thermostat changed by hand, only for the hold duration, and ended early by any input change; see **Manual Changes** below
 
 The Status column is only written when a Status Entity is configured; it shares
 the branch order above with the temperature, so the two cannot disagree. It is
 also written only once the thermostats have taken the target, so it reports what
-happened rather than what was decided — see **Status Entity** below.
+happened rather than what was decided — see **Status Entity** below. `Manual` is
+the exception: it is written when a hold starts, without waiting for a read-back,
+since the thermostat already reported the setting being held.
 
 ### Presence Detection Priority
 
@@ -185,16 +191,24 @@ How presence is determined based on configuration:
 
 **Status Entity:**
 - Entirely optional. Leave it empty and nothing is written; every other behaviour is identical
-- The helper must offer exactly these options (capitalisation included): `Comfort`, `Comfort Boosted`, `Eco`, `Away`, `Frost Protection`, `Window Open`, `Off`
+- The helper must offer exactly these options (capitalisation included): `Comfort`, `Comfort Boosted`, `Eco`, `Away`, `Frost Protection`, `Window Open`, `Off`, `Manual`
 - **The helper reports what the thermostats took, not what was decided.** It is written only once every reachable climate entity agrees with the target — HVAC mode, plus preset or temperature to match how the entity is driven
 - Consequences of that, worth understanding before putting it on a dashboard:
   - It **lags a change** by however long the integration takes to report the new state. The blueprint also watches the climate entities' own `temperature` and `preset_mode` attributes, so once the thermostat catches up, that alone re-runs the check and writes the helper — no need to wait for an unrelated input to change
   - On a cloud-backed integration that first lag can still be real, just no longer indefinite. Measured on Overkiz: a helper used to still report its previous mode 15 minutes after a load-shedding run turned every room off, waiting for an unrelated trigger; it now updates as soon as the thermostat reports the new setpoint. Treat it as a record of the last confirmed mode, not a live view
   - A command the thermostat or its cloud **rejects leaves the helper on its previous value**. Stale, but it never claims a mode the heating never took. The failure is visible in the trace and the logbook instead
-  - A thermostat changed **by hand** to something the automation did not ask for holds the helper back until the next run corrects it
+  - A thermostat changed **by hand** shows `Manual` for as long as the change is held — see **Manual Changes** below
   - If **every** climate entity is unavailable, nothing is written
 - Written only when the mode changed, so a steady state leaves no logbook entry
 - An option missing from the helper is not written and the helper keeps its previous value; the run continues and the heating is unaffected
+
+**Manual Changes:**
+- A change made on the thermostat itself, in its vendor app or in the Home Assistant UI — setpoint, preset or HVAC mode — is **held** for the **Manual Change Hold Duration** (default 2 h) instead of being put back. The status helper shows `Manual` meanwhile
+- Any input change ends the hold early and the room reconciles: schedule, presence, guest mode, boost, window, either override, frost protection. A restart or an integration reconnecting does not
+- **Manual Change DateTime Helper** (optional) stores when the hold ends, so it survives a restart and expires on time. Without it, the hold lasts until the next input change
+- Never held while the heating is **forced off** (heating off override, window open) or in **frost protection**: the thermostat is put back straight away, so a hand on the dial cannot defeat load shedding or heat an empty house
+- Set the duration to 0 to always put manual changes back
+- How a manual change is told apart from the automation's own commands: Home Assistant tags a thermostat's report with the command's context for a few seconds. An untagged report counts as manual only if it disagrees with the target, so a slow integration catching up does not. One case can still be misread: an integration reporting a *previous* command more than a few seconds late, after a newer one was sent
 
 **Overrides:**
 - **Heating Off Override** and **Window/Door Open** → Both force HVAC mode **OFF**, overriding everything including frost protection

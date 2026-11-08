@@ -13,6 +13,7 @@ blueprint:
     - 🎭 Guest mode
     - 🎯 Optional preset mode support
     - ⏱️ Configurable durations for all state changes
+    - 🖐️ Manual thermostat changes held for a while instead of put back
     - 📊 Optional status helper reporting the applied mode
 
     **Automatic frost protection needs a date-and-time helper, and person
@@ -377,6 +378,48 @@ blueprint:
                     - binary_sensor
               multiple: false
 
+    manual_changes:
+      name: Manual Changes
+      icon: mdi:knob
+      collapsed: true
+      input:
+        manual_hold_duration:
+          name: ⏱️ Manual Change Hold Duration
+          description: >-
+            How long a thermostat changed by hand -- on the device or in its
+            vendor app -- keeps that setting before the automation takes over
+            again. Any change to an input (schedule, presence, window,
+            override) ends the hold earlier. Without the helper below, the
+            hold lasts until that next input change instead. Set it to 0 to
+            put a manual change back straight away. Never applies while the
+            heating is forced off or in frost protection: those put the
+            thermostat back regardless.
+          default:
+            hours: 2
+            minutes: 0
+            seconds: 0
+          selector:
+            duration:
+              enable_day: false
+
+        manual_hold_datetime_helper:
+          name: ⏱️ Manual Change DateTime Helper (Optional)
+          description: |
+            `optional`
+
+            Input datetime (date and time) recording when a manual change
+            hold ends, so the hold survives a Home Assistant restart and
+            expires on time. Without it, a hold lasts until the next input
+            change.
+
+            Create your helper [here](https://my.home-assistant.io/redirect/helpers/).
+          default: []
+          selector:
+            entity:
+              filter:
+                - domain: input_datetime
+              multiple: false
+
     status:
       name: Status
       icon: mdi:eye
@@ -388,7 +431,7 @@ blueprint:
             Optional input_select updated with the mode the thermostats have
             actually taken, for dashboards. Create it with exactly these
             options, in any order: Comfort, Comfort Boosted, Eco, Away, Frost
-            Protection, Window Open, Off. Capitalisation matters.
+            Protection, Window Open, Off, Manual. Capitalisation matters.
 
             Written only once every reachable thermostat agrees with the
             target, so it lags a change by the integration's polling delay, and
@@ -442,11 +485,23 @@ variables:
   heating_off_override: !input heating_off_override
   frost_protection_override: !input frost_protection_override
 
+  # Manual Changes
+  manual_hold_duration: !input manual_hold_duration
+  manual_hold_datetime_helper: !input manual_hold_datetime_helper
+
   # Status
   status_entity: !input status_entity
 
   # A manual "Run actions" supplies a trigger with no id
   trigger_id: "{{ trigger.id | default('', true) }}"
+
+  # A thermostat reporting its own state. Either it caught up with a command or
+  # someone changed it; neither is a reason to send commands, so these runs only
+  # read back.
+  climate_report: >-
+    {{ trigger_id in ['climate_setpoint_changed', 'climate_preset_changed', 'climate_mode_changed'] }}
+
+  manual_hold_seconds: "{{ timedelta(**manual_hold_duration).total_seconds() }}"
 
   # An offset of 0 means "use eco" rather than "same as comfort"
   away_temp: >-
@@ -542,10 +597,10 @@ triggers:
     for: !input climate_available_duration
     id: climate_available
 
-  # Without these, nothing re-runs once a thermostat catches up to a commanded
-  # setpoint/preset, so the status helper waits on an unrelated trigger. Scoped
-  # to these attributes, not a bare state trigger, to skip current_temperature
-  # (room temp) churn.
+  # A thermostat catching up with a command, so the status helper is written
+  # without waiting on an unrelated trigger, or someone changing it by hand.
+  # Scoped to these attributes, not a bare state trigger, to skip
+  # current_temperature (room temp) churn.
   - trigger: state
     entity_id: !input climate_target
     attribute: temperature
@@ -555,6 +610,18 @@ triggers:
     entity_id: !input climate_target
     attribute: preset_mode
     id: climate_preset_changed
+
+  # not_from/not_to also make it ignore attribute-only changes, which the two
+  # triggers above cover; returning from unavailable is climate_available's job
+  - trigger: state
+    entity_id: !input climate_target
+    not_from:
+      - unavailable
+      - unknown
+    not_to:
+      - unavailable
+      - unknown
+    id: climate_mode_changed
 
   # not_to rather than to: "not_home", so leaving for a named zone ("Work")
   # counts as leaving
@@ -641,6 +708,10 @@ triggers:
     at: !input frost_protection_datetime_helper
     id: frost_protection_time_reached
 
+  - trigger: time
+    at: !input manual_hold_datetime_helper
+    id: manual_hold_expired
+
 actions:
   # The datetime helper is both the countdown and the "active" flag: a time in
   # the past means active, the epoch means nothing is scheduled.
@@ -682,8 +753,23 @@ actions:
               1970-01-01 00:00:00
             {% endif %}
 
+  # Any input change ends a hold. A restart, a reconnect and the thermostats'
+  # own reports do not, or a hold would end at the next poll.
+  - if:
+      - >-
+        {{ manual_hold_datetime_helper | length > 0
+           and not climate_report
+           and trigger_id not in ['ha_start', 'climate_available']
+           and states(manual_hold_datetime_helper) != '1970-01-01 00:00:00' }}
+    then:
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: "{{ manual_hold_datetime_helper }}"
+        data:
+          datetime: "1970-01-01 00:00:00"
+
   # Rendered here rather than in the top-level variables so that it sees the
-  # helper as written by the steps above
+  # helpers as written by the steps above
   - variables:
       frost_protection_active: >-
         {% set scheduled_dt = states(frost_protection_datetime_helper) | as_datetime if frost_protection_datetime_helper | length > 0 else none %}
@@ -748,6 +834,65 @@ actions:
           Eco
         {% endif %}
 
+      # Forced off and frost protection always win over a hand on the dial
+      hold_allowed: "{{ target_hvac_mode == 'heat' and not frost_protection_active }}"
+
+      manual_hold_active: >-
+        {% set until = states(manual_hold_datetime_helper) | as_datetime if manual_hold_datetime_helper | length > 0 else none %}
+        {{ hold_allowed and until is not none and (until | as_local) > now() }}
+
+      # The automation's own commands come back tagged with the run's context,
+      # so a report with no parent context came from the device, its vendor
+      # app or the Home Assistant UI. Home Assistant keeps that tag for only a
+      # few seconds after a command, so a slower integration's catch-up arrives
+      # untagged: agreeing with the target is what keeps it from counting.
+      manual_change: >-
+        {% if climate_report and trigger.to_state.context.parent_id is none and has_value(trigger.entity_id) %}
+          {% set entity = trigger.entity_id %}
+          {% if states(entity) != target_hvac_mode %}
+            {{ true }}
+          {% elif target_hvac_mode == 'off' %}
+            {{ false }}
+          {% elif use_preset_modes %}
+            {% set presets = state_attr(entity, 'preset_modes') or [] %}
+            {{ target_preset in presets and state_attr(entity, 'preset_mode') != target_preset }}
+          {% else %}
+            {{ (target_temp | float - (state_attr(entity, 'temperature') | float(0))) | abs > 0.1 }}
+          {% endif %}
+        {% else %}
+          {{ false }}
+        {% endif %}
+
+      hold_manual_change: "{{ manual_change and hold_allowed and manual_hold_seconds > 0 }}"
+
+      # A manual change that cannot be held falls through to the commands below,
+      # which put the thermostat back
+      skip_commands: >-
+        {{ (climate_report and not manual_change)
+           or (trigger_id in ['ha_start', 'climate_available'] and manual_hold_active) }}
+
+  - if:
+      - "{{ hold_manual_change }}"
+    then:
+      - if:
+          - "{{ manual_hold_datetime_helper | length > 0 }}"
+        then:
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: "{{ manual_hold_datetime_helper }}"
+            data:
+              datetime: "{{ (now() + timedelta(seconds=manual_hold_seconds | float)).strftime('%Y-%m-%d %H:%M:%S') }}"
+      - if:
+          - "{{ status_entity | length > 0 and states(status_entity) != 'Manual' }}"
+        then:
+          - action: input_select.select_option
+            continue_on_error: true
+            target:
+              entity_id: "{{ status_entity }}"
+            data:
+              option: Manual
+      - stop: Manual change held
+
   # Looped per entity rather than passing climate_target straight to the
   # actions: each entity's current state is compared before commanding it, so
   # a steady state sends nothing to cloud-backed integrations
@@ -757,6 +902,7 @@ actions:
         # An if rather than a bare condition: a failing condition would end the
         # whole loop and skip every entity after this one
         - if:
+            - "{{ not skip_commands }}"
             - "{{ has_value(repeat.item) }}"
           then:
             - variables:
@@ -830,9 +976,8 @@ actions:
 
   # Only once the thermostats agree, so a rejected command leaves the helper on
   # its previous value: stale, but never claiming a mode the heating never took.
-  # Nothing here triggers on the climate entities' own state, so a run that
-  # commanded a change reads back stale and the helper waits for whatever
-  # triggers the next run. On a cloud integration that can be a long wait.
+  # A run that commanded a change reads back stale; the thermostats' reports
+  # re-run this check once they catch up.
   - if:
       - >-
         {{ status_entity | length > 0 and status_confirmed
@@ -847,4 +992,7 @@ actions:
         data:
           option: "{{ target_mode }}"
 
-mode: single
+# Several thermostats in one room report a command back within milliseconds of
+# each other. Those runs send nothing, but each must read back, or the last one
+# to catch up never confirms the status.
+mode: queued

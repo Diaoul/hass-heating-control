@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-11-08
+
+### Added
+
+- Manual changes are held. A setpoint, preset or HVAC mode changed on the
+  thermostat, in its vendor app or in the Home Assistant UI now keeps that
+  setting for the new **Manual Change Hold Duration** (default 2 h), and the
+  status helper shows the new `Manual` option. Any input change ends the hold
+  early. An optional **Manual Change DateTime Helper** makes the hold survive a
+  restart and expire on time; without it the hold lasts until the next input
+  change. Never applies while the heating is forced off or in frost
+  protection. Set the duration to 0 to keep putting changes back.
+- A thermostat's HVAC mode changing (turned off at the device, say) is now
+  noticed too.
+
+### Changed
+
+- Add `Manual` to your status helper's options, or it keeps showing the
+  previous mode during a hold.
+
+### Fixed
+
+- 1.5.0's setpoint/preset triggers made the automation react to its own
+  commands. With several thermostats in a room, their reports arrive
+  milliseconds apart: the first re-sent commands to the others before they had
+  reported, and the rest were dropped with `Already running`. Those reports
+  now only read back, never command, and runs queue instead of being dropped.
+- 1.5.0 also put a manual change back within seconds of the integration
+  reporting it, contradicting the documented "stays changed until the next
+  trigger".
+
 ## [1.5.0] - 2026-09-27
 
 ### Fixed
